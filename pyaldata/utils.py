@@ -741,3 +741,23 @@ def clean_integer_fields(df):
                         df[field] = int_version
 
     return df
+
+
+def expand_field_in_time(trial_data, field):
+    """
+    Expand scalar field to a vector that can be used for prediction per time point.
+
+    Parameters
+    ----------
+    trial_data : pd.DataFrame
+        data in trial_data format
+    field : string
+        field to expand
+
+    Returns
+    -------
+    array of length T where T is the sum of lengths of the trials in the dataframe
+    (similarly to concat_trials(trial_data, some_time_varying_field))
+    """
+    return np.concatenate([trial[field] * np.ones(get_trial_length(trial))
+                           for (i, trial) in trial_data.iterrows()])
