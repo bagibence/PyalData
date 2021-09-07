@@ -641,7 +641,7 @@ def read_cmp(file_path):
     return df_array
 
 
-def _slice_in_trial(trial, sl, warn=False):
+def _slice_in_trial(trial, sl, warn=False, ref_field=None):
     """
     Check if the slice is within the trial's time indices
 
@@ -654,12 +654,16 @@ def _slice_in_trial(trial, sl, warn=False):
     warn : bool, optional, default False
         whether to warn if the slice is outside
         the trial's time index
+    ref_field : str (optional)
+        time-varying field to use for identifying the rest
+        if not given, the first field that ends with "spikes" or "rates" is used
+
 
     Returns
     -------
     is_inside : bool
     """
-    T = get_trial_length(trial)
+    T = get_trial_length(trial, ref_field)
 
     is_inside = True
 
