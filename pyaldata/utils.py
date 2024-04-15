@@ -1,8 +1,8 @@
-import numpy as np
-import pandas as pd
-
 import functools
 import warnings
+
+import numpy as np
+import pandas as pd
 
 
 def copy_td(func):
@@ -59,7 +59,12 @@ def remove_suffix(text, suffix):
     return text
 
 
-def get_time_varying_fields(trial_data, ref_field=None):
+def get_time_varying_fields(
+    trial_data,
+    ref_field=None,
+    strict_criterion: bool = True,
+    warn_if_suspicious: bool = False,
+):
     """
     Identify time-varying fields in the dataset
 
@@ -72,6 +77,19 @@ def get_time_varying_fields(trial_data, ref_field=None):
     ref_field : str (optional)
         time-varying field to use for identifying the rest
         if not given, the first field that ends with "spikes" or "rates" is used
+
+    strict_criterion: bool, default True
+        in order for a column to qualify as time-varying,
+        it has to contain numpy arrays and the first dimension of the arrays has to match
+        the reference field on all trials
+
+    warn_if_suspicious: bool, default False
+        only used if strict_criterion is True.
+        if a field contains numpy arrays and has the same length as the reference field
+        on 80% of the trials, it might be a time-varying field with some errors.
+        set this to true to check and warn if a field like that is found
+        if strict_criterion is False, such fields are likely to cause an error
+
 
     Returns
     -------
@@ -86,24 +104,43 @@ def get_time_varying_fields(trial_data, ref_field=None):
             if col.endswith("spikes") or col.endswith("rates")
         ][0]
 
-    # identify candidates based on the first trial
-    first_trial = trial_data.iloc[0]
-    T = first_trial[ref_field].shape[0]
     time_fields = []
-    for col in first_trial.index:
-        try:
-            if first_trial[col].shape[0] == T:
-                time_fields.append(col)
-        except:
-            pass
 
-    # but check the rest of the trials, too
-    ref_lengths = np.array([arr.shape[0] for arr in trial_data[ref_field]])
-    for col in time_fields:
-        col_lengths = np.array([arr.shape[0] for arr in trial_data[col]])
-        assert np.all(
-            col_lengths == ref_lengths
-        ), f"not all lengths in {col} match the reference {ref_field}"
+    if strict_criterion:
+        required_match_ratio = 0.8
+
+        ref_lengths = np.array([arr.shape[0] for arr in trial_data[ref_field]])
+
+        for col in get_array_fields(trial_data):
+            col_lengths = np.array([arr.shape[0] for arr in trial_data[col]])
+            if np.all(col_lengths == ref_lengths):
+                time_fields.append(col)
+            elif warn_if_suspicious:
+                match_ratio = np.mean(col_lengths == ref_lengths)
+                if match_ratio >= required_match_ratio:
+                    warnings.warn(
+                        f"{col} might be a time-varying field. It matches the length of {ref_field} on {match_ratio*100}% of trials"
+                    )
+    else:
+        # use the old method
+
+        # identify candidates based on the first trial
+        first_trial = trial_data.iloc[0]
+        T = first_trial[ref_field].shape[0]
+        for col in first_trial.index:
+            try:
+                if first_trial[col].shape[0] == T:
+                    time_fields.append(col)
+            except:
+                pass
+
+        # but check the rest of the trials, too
+        ref_lengths = np.array([arr.shape[0] for arr in trial_data[ref_field]])
+        for col in time_fields:
+            col_lengths = np.array([arr.shape[0] for arr in trial_data[col]])
+            assert np.all(
+                col_lengths == ref_lengths
+            ), f"not all lengths in {col} match the reference {ref_field}"
 
     return time_fields
 
